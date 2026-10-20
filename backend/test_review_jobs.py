@@ -8,6 +8,8 @@ from review_jobs import (
     create_review_job,
     update_review_job,
     get_review_job,
+    complete_review_job,
+    fail_review_job,
 )
 
 
@@ -41,6 +43,28 @@ def test_review_jobs():
         assert job["status"] == "running"
         assert job["stage"] == "generating"
         print("Progress update: PASSED")
+
+        result = {
+            "repository": "python/cpython",
+            "pull_request": 1,
+            "review": "Example AI review for local testing.",
+        }
+
+        complete_review_job(job_id, result)
+        job = get_review_job(job_id)
+
+        assert job["status"] == "completed"
+        assert job["stage"] == "complete"
+        assert job["review_result"] == result
+        print("Completed review storage: PASSED")
+
+        failed_job_id = create_review_job()
+        fail_review_job(failed_job_id, "Example failure")
+        failed_job = get_review_job(failed_job_id)
+
+        assert failed_job["status"] == "failed"
+        assert failed_job["error_message"] == "Example failure"
+        print("Failed review storage: PASSED")
 
 
 if __name__ == "__main__":

@@ -47,3 +47,39 @@ def get_review_job(job_id):
     table = boto3.resource("dynamodb").Table(JOBS_TABLE)
     response = table.get_item(Key={"job_id": job_id})
     return response.get("Item")
+
+
+def complete_review_job(job_id, result):
+    table = boto3.resource("dynamodb").Table(JOBS_TABLE)
+
+    table.update_item(
+        Key={"job_id": job_id},
+        UpdateExpression=(
+            "SET #s = :status, stage = :stage, "
+            "review_result = :result"
+        ),
+        ConditionExpression="attribute_exists(job_id)",
+        ExpressionAttributeNames={"#s": "status"},
+        ExpressionAttributeValues={
+            ":status": "completed",
+            ":stage": "complete",
+            ":result": result,
+        },
+    )
+
+
+def fail_review_job(job_id, message):
+    table = boto3.resource("dynamodb").Table(JOBS_TABLE)
+
+    table.update_item(
+        Key={"job_id": job_id},
+        UpdateExpression=(
+            "SET #s = :status, error_message = :message"
+        ),
+        ConditionExpression="attribute_exists(job_id)",
+        ExpressionAttributeNames={"#s": "status"},
+        ExpressionAttributeValues={
+            ":status": "failed",
+            ":message": message,
+        },
+    )
