@@ -21,7 +21,7 @@ app.add_middleware(
         os.getenv("FRONTEND_URL", "http://localhost:5173")
     ],
     allow_credentials=False,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -237,8 +237,7 @@ from google.genai import types
 
 load_dotenv()
 
-def run_ai_review(pr_url: str, x_demo_key: str, report=None):
-    verify_demo_key(x_demo_key)
+def execute_ai_review(pr_url: str, report=None):
     # Get the code changes using our existing function
     
     if report: report("fetching")
@@ -410,6 +409,9 @@ def run_ai_review(pr_url: str, x_demo_key: str, report=None):
 
     return result
 
+def run_ai_review(pr_url: str, x_demo_key: str, report=None):
+    verify_demo_key(x_demo_key)
+    return execute_ai_review(pr_url, report=report)
 
 @app.get("/ai-review")
 def ai_review(pr_url: str, x_demo_key: str = Header(default=None)):
@@ -473,9 +475,114 @@ def ai_review_stream(
     )
 
 
+@app.get("/review-jobs/{job_id}")
+def review_job_status(
+    job_id: str,
+    x_demo_key: str = Header(default=None),
+):
+    verify_demo_key(x_demo_key)
+
+    from review_jobs import get_review_job
+
+    job = get_review_job(job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail="Review job not found",
+        )
+
+    response = {
+        "job_id": job["job_id"],
+        "status": job["status"],
+        "stage": job.get("stage"),
+    }
+
+    if job["status"] == "completed":
+        response["result"] = job.get("review_result")
+
+    if job["status"] == "failed":
+        response["error"] = job.get("error_message")
+
+    return response
 
 
+from pydantic import BaseModel, Field
+import re
 
+
+class ReviewJobRequest(BaseModel):
+    pr_url: str = Field(min_length=1, max_length=2048)
+
+
+def get_review_worker_client():
+    import boto3
+
+    return boto3.client("lambda")
+
+
+@app.post("/review-jobs", status_code=202)
+def submit_review_job(
+    request: ReviewJobRequest,
+    x_demo_key: str = Header(default=None),
+):
+    verify_demo_key(x_demo_key)
+
+    pr_url = request.pr_url.strip()
+
+    if not re.fullmatch(
+        r"https://github\.com/"
+        r"[A-Za-z0-9-]+/"
+        r"[A-Za-z0-9_.-]+/"
+        r"pull/[1-9][0-9]*/?",
+        pr_url,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Please enter a valid GitHub pull request URL",
+        )
+
+    worker_name = os.getenv("REVIEW_WORKER_FUNCTION_NAME", "").strip()
+
+    if not worker_name:
+        raise HTTPException(
+            status_code=503,
+            detail="Background review worker is not configured",
+        )
+
+    from review_jobs import create_review_job
+
+    job_id = create_review_job(pr_url=pr_url.rstrip("/"))
+
+    try:
+        response = get_review_worker_client().invoke(
+            FunctionName=worker_name,
+            InvocationType="Event",
+            Payload=json.dumps({"job_id": job_id}).encode("utf-8"),
+        )
+
+        if response.get("StatusCode") != 202:
+            raise RuntimeError("Worker invocation was not accepted")
+
+    except Exception:
+        # A connection failure can occur after Lambda accepts a job.
+        # Keep the job available for status checks rather than
+        # incorrectly marking a potentially running job as failed.
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": (
+                    "Worker submission could not be confirmed. "
+                    "Check this job's status before submitting again."
+                ),
+                "job_id": job_id,
+            },
+        ) from None
+
+    return {
+        "job_id": job_id,
+        "status": "accepted",
+    }
 
 
 

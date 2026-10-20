@@ -4,25 +4,31 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import boto3
+from botocore.exceptions import ClientError
 
 JOBS_TABLE = os.getenv("JOBS_TABLE", "pr-guardian-jobs")
 
 
-def create_review_job():
+def create_review_job(pr_url=None):
     job_id = str(uuid.uuid4())
     expires = int(
         (datetime.now(timezone.utc) + timedelta(hours=24)).timestamp()
     )
 
+    item = {
+        "job_id": job_id,
+        "status": "queued",
+        "stage": "fetching",
+        "expires_at": expires,
+    }
+
+    if pr_url is not None:
+        item["pr_url"] = pr_url
+
     table = boto3.resource("dynamodb").Table(JOBS_TABLE)
 
     table.put_item(
-        Item={
-            "job_id": job_id,
-            "status": "queued",
-            "stage": "fetching",
-            "expires_at": expires,
-        },
+        Item=item,
         ConditionExpression="attribute_not_exists(job_id)",
     )
 
@@ -83,3 +89,33 @@ def fail_review_job(job_id, message):
             ":message": message,
         },
     )
+
+
+def claim_review_job(job_id):
+    table = boto3.resource("dynamodb").Table(JOBS_TABLE)
+
+    try:
+        table.update_item(
+            Key={"job_id": job_id},
+            UpdateExpression=(
+                "SET #s = :running, stage = :stage"
+            ),
+            ConditionExpression="#s = :queued",
+            ExpressionAttributeNames={
+                "#s": "status",
+            },
+            ExpressionAttributeValues={
+                ":running": "running",
+                ":queued": "queued",
+                ":stage": "fetching",
+            },
+        )
+        return True
+
+    except ClientError as error:
+        code = error.response.get("Error", {}).get("Code")
+
+        if code == "ConditionalCheckFailedException":
+            return False
+
+        raise

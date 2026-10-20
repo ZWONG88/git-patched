@@ -10,6 +10,7 @@ from review_jobs import (
     get_review_job,
     complete_review_job,
     fail_review_job,
+    claim_review_job,
 )
 
 
@@ -65,6 +66,21 @@ def test_review_jobs():
         assert failed_job["status"] == "failed"
         assert failed_job["error_message"] == "Example failure"
         print("Failed review storage: PASSED")
+
+
+        duplicate_job_id = create_review_job()
+
+        first_claim = claim_review_job(duplicate_job_id)
+        second_claim = claim_review_job(duplicate_job_id)
+
+        assert first_claim is True
+        assert second_claim is False
+
+        claimed_job = get_review_job(duplicate_job_id)
+
+        assert claimed_job["status"] == "running"
+        print("Duplicate job protection: PASSED")
+
 
 
 if __name__ == "__main__":
