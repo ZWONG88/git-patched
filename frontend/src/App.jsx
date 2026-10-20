@@ -60,14 +60,24 @@ const response = await fetch(
       <h1>PR Guardian 🛡️</h1>
       <p>Your AI-powered GitHub code reviewer</p>
 
+      <label className="field-label" htmlFor="pr-url">
+        GitHub Pull Request URL
+      </label>
+
       <input
         type="url"
         placeholder="https://github.com/owner/repo/pull/123"
         value={prUrl}
         onChange={(event) => setPrUrl(event.target.value)}
       />
+      <p className="input-hint">
+        Paste a public GitHub pull request URL to receive an AI-powered code review.
+      </p>
 
-      
+<label className="field-label" htmlFor="demo-key">
+  Demo Access Key
+</label>
+
 <input
   type="password"
   placeholder="Enter demo access key"
@@ -77,8 +87,25 @@ const response = await fetch(
 />
 
       <button onClick={analyzePR} disabled={loading}>
-        {loading ? 'Analyzing...' : 'Analyze Pull Request'}
+        
+        {loading ? (
+          <span className="button-loading">
+            <span className="loading-spinner" aria-hidden="true"></span>
+            Analyzing Pull Request...
+          </span>
+        ) : (
+          'Analyze Pull Request'
+        )}
+
       </button>
+
+{loading && (
+  <p className="loading-message" role="status">
+    Fetching code changes and generating an AI review.
+    This may take a few minutes. Please keep this page open.
+  </p>
+)}
+
 
       {error && (
         <p role="alert" style={{ color: '#f87171' }}>
@@ -98,10 +125,18 @@ const response = await fetch(
 
     <div className="markdown-content">
       <ReactMarkdown>{review}</ReactMarkdown>
+    
+
+
     </div>
   </section>
 )}
-
+<footer className="app-footer">
+  <p>Powered by React, FastAPI, GitHub API &amp; Google Gemini</p>
+  <p className="footer-subtitle">
+    AI-assisted reviews are suggestions, not a substitute for human code review.
+  </p>
+</footer>
     </main>
   )
 }
