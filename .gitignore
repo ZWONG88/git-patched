@@ -1,0 +1,15 @@
+# Secret API keys
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+.venv/
+venv/
+
+# Python temporary files
+__pycache__/
+*.pyc
+
+# Mac system files
+.DS_Store
