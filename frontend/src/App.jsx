@@ -22,14 +22,19 @@ function App() {
 
     try {
       
-          const response = await fetch(
-            `http://127.0.0.1:8000/ai-review?pr_url=${encodeURIComponent(prUrl)}`,
-            {
-              headers: {
-                'x-demo-key': demoKey
-              }
-            }
-          )
+          
+const apiUrl =
+  import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+
+const response = await fetch(
+  `${apiUrl}/ai-review?pr_url=${encodeURIComponent(prUrl)}`,
+  {
+    headers: {
+      'x-demo-key': demoKey
+    }
+  }
+)
+
 
 
       const data = await response.json()

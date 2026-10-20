@@ -1,16 +1,21 @@
-
+import os
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from threading import BoundedSemaphore
 import time
 import hmac
 from threading import Lock
+from datetime import datetime, timezone
+import sqlite3
 app = FastAPI()
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        os.getenv("FRONTEND_URL", "http://localhost:5173")
+    ],
     allow_credentials=False,
     allow_methods=["GET"],
     allow_headers=["*"],
@@ -20,6 +25,58 @@ review_slots = BoundedSemaphore(1)
 
 review_cache = {}
 cache_lock = Lock()
+
+
+from pathlib import Path
+
+DATABASE_PATH = Path(__file__).parent / "reviews.db"
+
+def initialize_database():
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS daily_usage (
+                date TEXT PRIMARY KEY,
+                review_count INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        connection.commit()
+
+initialize_database()
+
+def claim_daily_review():
+    today = datetime.now(timezone.utc).date().isoformat()
+    daily_limit = int(os.getenv("DAILY_REVIEW_LIMIT", "20"))
+
+    with sqlite3.connect(DATABASE_PATH, timeout=10) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO daily_usage (date, review_count)
+            VALUES (?, 0)
+            """,
+            (today,)
+        )
+
+        cursor = connection.execute(
+            """
+            UPDATE daily_usage
+            SET review_count = review_count + 1
+            WHERE date = ? AND review_count < ?
+            """,
+            (today, daily_limit)
+        )
+
+        if cursor.rowcount == 0:
+            connection.rollback()
+            raise HTTPException(
+                status_code=429,
+                detail="Daily AI review limit reached. Try again tomorrow."
+            )
+
+        connection.commit()
+
+
 
 
 def verify_demo_key(provided_key):
@@ -276,17 +333,19 @@ def ai_review(pr_url: str, x_demo_key: str = Header(default=None)):
             detail="Another review is running. Please try again shortly."
         )
 
-    
+    try:
+        claim_daily_review()
+    except Exception:
+        review_slots.release()
+        raise
     
     try:
         start_gemini = time.perf_counter()
-
-        
         
         response = client.models.generate_content(
-    model="gemini-3.8-flash",
-    contents=prompt
-)
+            model="gemini-3.8-flash",
+            contents=prompt
+    )
 
 
 
