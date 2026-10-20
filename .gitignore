@@ -18,3 +18,4 @@ __pycache__/
 *.db-journal
 *.db-shm
 *.db-wal
+.venv312/
