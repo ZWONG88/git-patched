@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import {
+  demoScenarios,
   getReviewStatus,
   localDemo,
   submitReview,
 } from './reviewApi'
+import { pollReview } from './reviewFlow'
 import './App.css'
 
 const stages = [
@@ -15,9 +17,6 @@ const stages = [
   { id: 'formatting', label: 'Preparing review results' },
 ]
 
-const pause = (milliseconds) =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds))
-
 function App() {
   const [prUrl, setPrUrl] = useState('')
   const [demoKey, setDemoKey] = useState('')
@@ -27,7 +26,11 @@ function App() {
   const [currentStage, setCurrentStage] = useState('')
   const [completedStages, setCompletedStages] = useState([])
   const [activeJob, setActiveJob] = useState(null)
+  const [scenario, setScenario] = useState('success')
   const busy = useRef(false)
+  const controller = useRef(null)
+
+  useEffect(() => () => controller.current?.abort(), [])
 
   async function analyzePR() {
     if (busy.current) return
@@ -51,86 +54,78 @@ function App() {
     setError('')
     setReview('')
 
+    const attempt = new AbortController()
+    controller.current = attempt
     let job = activeJob
 
     try {
       if (!job) {
         setCurrentStage('fetching')
         setCompletedStages([])
-
         try {
-          const submitted = await submitReview(prUrl.trim(), demoKey)
-
-          if (!submitted.job_id) {
-            throw new Error('Submission returned no job ID.')
+          const submitted = await submitReview(prUrl.trim(), demoKey, {
+            scenario, signal: attempt.signal,
+          })
+          if (typeof submitted.job_id !== 'string' || !submitted.job_id) {
+            throw new Error('Submission returned no job ID. Check with the operator before resubmitting.')
           }
-
-          job = { id: submitted.job_id, key: demoKey }
+          job = { id: submitted.job_id }
           setActiveJob(job)
         } catch (submissionError) {
           if (submissionError.jobId) {
-            setActiveJob({
-              id: submissionError.jobId,
-              key: demoKey,
-            })
+            setActiveJob({ id: submissionError.jobId })
           }
           throw submissionError
         }
       }
-
-      const deadline = Date.now() + 5 * 60 * 1000
-
-      while (Date.now() < deadline) {
-        const status = await getReviewStatus(job.id, job.key)
-
-        if (status.status === 'failed') {
-          setActiveJob(null)
-          throw new Error(status.error || 'The review failed.')
-        }
-
-        if (status.status === 'completed') {
-          const text = status.result?.review
-
-          if (typeof text !== 'string' || !text.trim()) {
-            throw new Error('The completed job returned no review text.')
+      const text = await pollReview({
+        jobId: job.id,
+        key: demoKey,
+        getStatus: getReviewStatus,
+        signal: attempt.signal,
+        timeout: localDemo && scenario === 'slow' ? 12000 : 300000,
+        onProgress: (status) => {
+          const stage = status.stage === 'cached' ? 'formatting' : status.stage
+          const index = stages.findIndex((item) => item.id === stage)
+          if (index >= 0) {
+            setCurrentStage(stage)
+            setCompletedStages(stages.slice(0, index).map((item) => item.id))
           }
-
-          setReview(text)
-          setCurrentStage('complete')
-          setCompletedStages(stages.map((stage) => stage.id))
-          setActiveJob(null)
-          return
-        }
-
-        if (!['queued', 'running'].includes(status.status)) {
-          throw new Error('The server returned an unexpected job status.')
-        }
-
-        const stage =
-          status.stage === 'cached' ? 'formatting' : status.stage
-        const index = stages.findIndex((item) => item.id === stage)
-
-        if (index >= 0) {
-          setCurrentStage(stage)
-          setCompletedStages(stages.slice(0, index).map((item) => item.id))
-        }
-
-        await pause(2000)
-      }
-
-      throw new Error(
-        'The review is taking longer than expected. Click Check review status to keep checking the same job.',
-      )
+        },
+      })
+      setReview(text)
+      setCurrentStage('complete')
+      setCompletedStages(stages.map((stage) => stage.id))
+      setActiveJob(null)
     } catch (err) {
+      if (attempt.signal.aborted) return
+      if (err.terminal) setActiveJob(null)
       setError(
         err.name === 'TimeoutError'
-          ? 'The request timed out. If a job ID is shown, check its status.'
-          : err.message || 'Could not connect to the backend.',
+          ? 'The request timed out. Check the existing job if its ID is shown. If no ID arrived, submission may still have succeeded; avoid immediately submitting it again.'
+          : err.message || 'Connection lost. Check the existing job if its ID is shown.',
       )
     } finally {
       busy.current = false
-      setLoading(false)
+      // The controller is cleared on pause; an unmounted component is not updated.
+      if (!attempt.signal.aborted || controller.current === null) {
+        setLoading(false)
+      }
     }
+  }
+
+  function pauseChecking() {
+    controller.current?.abort()
+    controller.current = null
+    setError('Status checks paused. The background job may continue. Choose Check review status to resume.')
+  }
+
+  function startAnotherReview() {
+    setActiveJob(null)
+    setError('')
+    setReview('')
+    setCurrentStage('')
+    setCompletedStages([])
   }
 
   return (
@@ -139,9 +134,18 @@ function App() {
       <p>Your AI-powered GitHub code reviewer</p>
 
       {localDemo && (
-        <p role="status">
-          🧪 Local simulation — sample results, no external calls.
-        </p>
+        <div className="simulation-panel">
+          <p role="status">🧪 Local simulation — sample results, no external calls.</p>
+          <label className="field-label" htmlFor="scenario">Try a scenario</label>
+          <select id="scenario" value={scenario}
+            onChange={(event) => setScenario(event.target.value)}
+            disabled={loading || Boolean(activeJob)}>
+            {demoScenarios.map((item) => (
+              <option key={item.id} value={item.id}>{item.label}</option>
+            ))}
+          </select>
+          <p className="input-hint">Simulations are held in memory and reset when you reload this page.</p>
+        </div>
       )}
 
       <label className="field-label" htmlFor="pr-url">
@@ -174,7 +178,7 @@ function App() {
             value={demoKey}
             onChange={(event) => setDemoKey(event.target.value)}
             autoComplete="off"
-            disabled={loading || Boolean(activeJob)}
+            disabled={loading}
           />
         </>
       )}
@@ -192,7 +196,17 @@ function App() {
         )}
       </button>
 
-      {activeJob && <p className="input-hint">Job ID: {activeJob.id}</p>}
+      {activeJob && <p className="input-hint job-id">Job ID: {activeJob.id}</p>}
+
+      {loading && activeJob && (
+        <button className="secondary-button" onClick={pauseChecking}>Pause status checks</button>
+      )}
+      {!loading && activeJob && (
+        <div className="recovery-options">
+          <p className="input-hint">Checking status reuses this job. Starting another leaves the existing job running.</p>
+          <button className="secondary-button" onClick={startAnotherReview}>Start another review</button>
+        </div>
+      )}
 
       {loading && (
         <div className="review-stages" role="status" aria-live="polite">
@@ -216,7 +230,7 @@ function App() {
           })}
           <p className="review-progress-caption">
             {localDemo
-              ? 'This simulation takes about ten seconds.'
+              ? scenario === 'slow' ? 'This simulation takes about thirty seconds; status checks pause sooner so you can try resuming.' : 'This simulation takes about ten seconds.'
               : 'Checking job status every two seconds.'}
           </p>
         </div>

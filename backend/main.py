@@ -97,7 +97,7 @@ def verify_demo_key(provided_key):
         )
 
     if not provided_key or not hmac.compare_digest(
-        provided_key, expected_key
+        provided_key.encode("utf-8"), expected_key.encode("utf-8")
     ):
         raise HTTPException(
             status_code=401,
@@ -373,7 +373,7 @@ def execute_ai_review(pr_url: str, report=None):
     
     except Exception as e:
         print(
-            f"Gemini request failed: {type(e).__name__}: {e}",
+            f"Gemini request failed: {type(e).__name__}",
             flush=True
         )
 

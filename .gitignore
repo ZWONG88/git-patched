@@ -19,3 +19,7 @@ __pycache__/
 *.db-shm
 *.db-wal
 .venv312/
+
+# Generated deployment files
+build/
+.aws-sam/

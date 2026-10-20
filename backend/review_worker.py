@@ -53,18 +53,27 @@ def process_review_job(job_id, reviewer=execute_ai_review):
     try:
         result = reviewer(pr_url, report=report)
 
-        if not isinstance(result, dict) or not result.get("review"):
+        if (
+            not isinstance(result, dict)
+            or not isinstance(result.get("review"), str)
+            or not result["review"].strip()
+        ):
             raise RuntimeError("Review returned no usable result.")
 
         complete_review_job(job_id, result)
         return {"job_id": job_id, "status": "completed"}
 
     except HTTPException as error:
-        fail_review_job(job_id, str(error.detail))
+        message = (
+            "Review capacity is currently full. Please try again later."
+            if error.status_code == 429
+            else "The review could not be completed. Please try again later."
+        )
+        fail_review_job(job_id, message)
         return {"job_id": job_id, "status": "failed"}
 
-    except Exception:
-        logger.exception("Review job failed: %s", job_id)
+    except Exception as error:
+        logger.error("Review job failed: %s (%s)", job_id, type(error).__name__)
         fail_review_job(
             job_id,
             "The AI review failed. Please try again later.",

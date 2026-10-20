@@ -9,7 +9,12 @@ from fastapi import HTTPException
 
 def claim_dynamodb_review():
     table_name = os.getenv("DYNAMODB_TABLE", "pr-guardian-usage")
-    limit = int(os.getenv("DAILY_REVIEW_LIMIT", "20"))
+    try:
+        limit = int(os.getenv("DAILY_REVIEW_LIMIT", "20"))
+    except ValueError:
+        raise HTTPException(status_code=503, detail="Review capacity is not configured correctly.") from None
+    if limit <= 0:
+        raise HTTPException(status_code=429, detail="Daily AI review limit reached. Try again tomorrow.")
     today = datetime.now(timezone.utc).date().isoformat()
 
     table = boto3.resource("dynamodb").Table(table_name)
