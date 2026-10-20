@@ -34,6 +34,8 @@ cache_lock = Lock()
 from pathlib import Path
 USE_DYNAMODB = os.getenv("USE_DYNAMODB", "false").lower() == "true"
 DYNAMODB_TABLE = os.getenv("DYNAMODB_TABLE", "pr-guardian-usage")
+JOBS_TABLE = os.getenv("JOBS_TABLE", "pr-guardian-jobs")
+AWS_LAMBDA_FUNCTION_NAME = os.getenv("AWS_LAMBDA_FUNCTION_NAME", "")
 DATABASE_PATH = Path(__file__).parent / "reviews.db"
 
 def initialize_database():
