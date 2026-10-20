@@ -5,6 +5,7 @@ import './App.css'
 
 function App() {
   const [prUrl, setPrUrl] = useState('')
+  const [demoKey, setDemoKey] = useState('')
   const [review, setReview] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -20,9 +21,16 @@ function App() {
     setReview('')
 
     try {
-      const response = await fetch(
-        `http://127.0.0.1:8000/ai-review?pr_url=${encodeURIComponent(prUrl)}`
-      )
+      
+          const response = await fetch(
+            `http://127.0.0.1:8000/ai-review?pr_url=${encodeURIComponent(prUrl)}`,
+            {
+              headers: {
+                'x-demo-key': demoKey
+              }
+            }
+          )
+
 
       const data = await response.json()
 
@@ -53,6 +61,15 @@ function App() {
         value={prUrl}
         onChange={(event) => setPrUrl(event.target.value)}
       />
+
+      
+<input
+  type="password"
+  placeholder="Enter demo access key"
+  value={demoKey}
+  onChange={(event) => setDemoKey(event.target.value)}
+  autoComplete="off"
+/>
 
       <button onClick={analyzePR} disabled={loading}>
         {loading ? 'Analyzing...' : 'Analyze Pull Request'}

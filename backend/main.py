@@ -1,6 +1,10 @@
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from threading import BoundedSemaphore
+import time
+import hmac
+from threading import Lock
 app = FastAPI()
 
 
@@ -11,6 +15,30 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+review_slots = BoundedSemaphore(1)
+
+review_cache = {}
+cache_lock = Lock()
+
+
+def verify_demo_key(provided_key):
+    expected_key = os.getenv("DEMO_ACCESS_KEY")
+
+    if not expected_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Demo access is not configured"
+        )
+
+    if not provided_key or not hmac.compare_digest(
+        provided_key, expected_key
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing demo access key"
+        )
+
 
 
 @app.get("/")
@@ -140,13 +168,55 @@ def review_pull_request(pr_url: str):
 import os
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 
 load_dotenv()
 
 @app.get("/ai-review")
-def ai_review(pr_url: str):
+def ai_review(pr_url: str, x_demo_key: str = Header(default=None)):
+    verify_demo_key(x_demo_key)
     # Get the code changes using our existing function
+    
+    start_github = time.perf_counter()
+
     pull_request = review_pull_request(pr_url)
+
+    github_seconds = time.perf_counter() - start_github
+    print(f"GitHub retrieval took: {github_seconds:.2f} seconds", flush=True)
+
+
+    # Check the current version of the pull request
+    owner = pull_request["repository"].split("/")[0]
+    repo = pull_request["repository"].split("/")[1]
+    pr_number = pull_request["pull_request"]
+
+    pr_api_url = (
+        f"https://api.github.com/repos/"
+        f"{owner}/{repo}/pulls/{pr_number}"
+    )
+
+    try:
+        pr_response = requests.get(pr_api_url, timeout=10)
+        pr_response.raise_for_status()
+        head_sha = pr_response.json()["head"]["sha"]
+    except (requests.RequestException, KeyError, ValueError):
+        raise HTTPException(
+            status_code=502,
+            detail="Could not verify the pull request version"
+        )
+
+    cache_key = f"{owner}/{repo}/{pr_number}/{head_sha}"
+
+    with cache_lock:
+        cached_review = review_cache.get(cache_key)
+
+    if cached_review is not None:
+        print("Cache hit! Reusing saved review.", flush=True)
+        return cached_review
+
+    print("Cache miss. Generating a new review.", flush=True)
+
+
 
     # Prepare code changes for Gemini
     code_text = ""
@@ -199,22 +269,69 @@ def ai_review(pr_url: str):
     {code_text}
     """
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-3.8-flash",
-            contents=prompt
-        )
-    except Exception:
+    
+    if not review_slots.acquire(blocking=False):
         raise HTTPException(
-            status_code=502,
-            detail="AI review service failed"
+            status_code=429,
+            detail="Another review is running. Please try again shortly."
         )
 
-    return {
+    
+    
+    try:
+        start_gemini = time.perf_counter()
+
+        
+        
+        response = client.models.generate_content(
+    model="gemini-3.8-flash",
+    contents=prompt
+)
+
+
+
+        gemini_seconds = time.perf_counter() - start_gemini
+        print(f"Gemini analysis took: {gemini_seconds:.2f} seconds", flush=True)
+
+    
+    except Exception as e:
+        print(
+            f"Gemini request failed: {type(e).__name__}: {e}",
+            flush=True
+        )
+
+        if getattr(e, "code", None) == 503:
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini is currently busy. Please try again later."
+            )
+
+        raise HTTPException(
+            status_code=502,
+            detail="AI review service failed. Please try again later."
+        )
+
+    finally:
+        review_slots.release()
+
+
+        
+    
+    result = {
         "repository": pull_request["repository"],
         "pull_request": pull_request["pull_request"],
         "review": response.text
     }
+
+    # Save only completed reviews
+    if response.text and response.text.strip():
+        with cache_lock:
+            review_cache[cache_key] = result
+
+        print("Review saved to cache.", flush=True)
+
+    return result
+
 
 
 
