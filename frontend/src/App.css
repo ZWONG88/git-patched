@@ -274,3 +274,65 @@ pre {
     width: 100%;
   }
 }
+
+
+/* Real review progress stages */
+
+.review-stages {
+  max-width: 550px;
+  margin: 32px auto 0;
+  padding: 24px;
+  background: #17171d;
+  border: 1px solid #343440;
+  border-radius: 16px;
+  text-align: left;
+}
+
+.review-stages h3 {
+  color: #f0eef7;
+  font-size: 1.1rem;
+  margin: 0 0 22px;
+}
+
+.review-stage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  color: #777386;
+  font-size: 0.95rem;
+}
+
+.stage-icon {
+  width: 22px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 1.2rem;
+}
+
+.stage-complete {
+  color: #8bd9aa;
+}
+
+.stage-active {
+  color: #f0eef7;
+  font-weight: 600;
+}
+
+.stage-active .stage-icon {
+  color: #a19cff;
+}
+
+.stage-status {
+  margin-left: auto;
+  color: #a19cff;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.review-stages .review-progress-caption {
+  margin-top: 20px;
+  color: #9994ae;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}

@@ -10,6 +10,17 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const [currentStage, setCurrentStage] = useState('')
+  const [completedStages, setCompletedStages] = useState([])
+
+  const stages = [
+    { id: 'fetching', label: 'Fetching GitHub pull request' },
+    { id: 'checking', label: 'Checking review cache' },
+    { id: 'preparing', label: 'Preparing code changes' },
+    { id: 'generating', label: 'Generating AI code review' },
+    { id: 'formatting', label: 'Preparing review results' },
+  ]
+
   async function analyzePR() {
     if (!prUrl.trim()) {
       setError('Please enter a GitHub pull request URL.')
@@ -19,7 +30,8 @@ function App() {
     setLoading(true)
     setError('')
     setReview('')
-
+    setCurrentStage('fetching')
+    setCompletedStages([])
     try {
       
           
@@ -27,7 +39,7 @@ const apiUrl =
   import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 
 const response = await fetch(
-  `${apiUrl}/ai-review?pr_url=${encodeURIComponent(prUrl)}`,
+  `${apiUrl}/ai-review-stream?pr_url=${encodeURIComponent(prUrl)}`,
   {
     headers: {
       'x-demo-key': demoKey
@@ -37,17 +49,76 @@ const response = await fetch(
 
 
 
-      const data = await response.json()
+      
+if (!response.ok) {
+  let message = 'Could not start the review.'
+  try {
+    const errorData = await response.json()
+    message = errorData.detail || message
+  } catch {
+    // Keep the default message.
+  }
+  throw new Error(message)
+}
 
-      if (!response.ok) {
-        throw new Error(
-          typeof data.detail === 'string'
-            ? data.detail
-            : 'Something went wrong.'
+if (!response.body) {
+  throw new Error('Streaming is not supported by this browser.')
+}
+
+const reader = response.body.getReader()
+const decoder = new TextDecoder()
+let buffer = ''
+let receivedResult = false
+
+while (true) {
+  const { value, done } = await reader.read()
+  if (done) break
+
+  buffer += decoder.decode(value, { stream: true })
+
+  const lines = buffer.split('\n')
+  buffer = lines.pop() || ''
+
+  for (const line of lines) {
+    if (!line.trim()) continue
+
+    const event = JSON.parse(line)
+
+    if (event.type === 'progress') {
+      const stageIndex = stages.findIndex(
+        (stage) => stage.id === event.stage
+      )
+
+      if (stageIndex >= 0) {
+        setCurrentStage(event.stage)
+        setCompletedStages(
+          stages.slice(0, stageIndex).map((stage) => stage.id)
         )
       }
 
-      setReview(data.review || 'No review was returned.')
+      if (event.stage === 'cached') {
+        setCurrentStage('formatting')
+        setCompletedStages(['fetching', 'checking'])
+      }
+    }
+
+    if (event.type === 'result') {
+      receivedResult = true
+      setCompletedStages(stages.map((stage) => stage.id))
+      setCurrentStage('complete')
+      setReview(event.data.review || 'No review was returned.')
+    }
+
+    if (event.type === 'error') {
+      throw new Error(event.message || 'Review failed.')
+    }
+  }
+}
+
+if (!receivedResult) {
+  throw new Error('The review connection ended unexpectedly.')
+}
+
     } catch (err) {
       setError(err.message || 'Could not connect to the backend.')
     } finally {
@@ -100,22 +171,34 @@ const response = await fetch(
       </button>
 
 
-{loading && (
-  <div className="review-progress" role="status">
-    <p className="loading-message">
-      Generating your AI code review...
-    </p>
 
-    <div className="review-progress-track" aria-hidden="true">
-      <div className="review-progress-bar"></div>
-    </div>
+{loading && (
+  <div className="review-stages" role="status" aria-live="polite">
+    <h3>Review in progress</h3>
+
+    {stages.map((stage) => {
+      const completed = completedStages.includes(stage.id)
+      const active = currentStage === stage.id
+
+      return (
+        <div
+          key={stage.id}
+          className={`review-stage ${completed ? 'stage-complete' : ''} ${active ? 'stage-active' : ''}`}
+        >
+          <span className="stage-icon" aria-hidden="true">
+            {completed ? '✓' : active ? '◉' : '○'}
+          </span>
+          <span>{stage.label}</span>
+          {active && <span className="stage-status">In progress</span>}
+        </div>
+      )
+    })}
 
     <p className="review-progress-caption">
-      Review time varies depending on the pull request and AI service.
+      Gemini analysis time varies depending on the pull request.
     </p>
   </div>
 )}
-
 
 
       {error && (

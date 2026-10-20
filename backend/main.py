@@ -7,6 +7,10 @@ import hmac
 from threading import Lock
 from datetime import datetime, timezone
 import sqlite3
+import json
+from queue import Queue
+from threading import Thread
+from fastapi.responses import StreamingResponse
 app = FastAPI()
 
 
@@ -229,11 +233,11 @@ from google.genai import types
 
 load_dotenv()
 
-@app.get("/ai-review")
-def ai_review(pr_url: str, x_demo_key: str = Header(default=None)):
+def run_ai_review(pr_url: str, x_demo_key: str, report=None):
     verify_demo_key(x_demo_key)
     # Get the code changes using our existing function
     
+    if report: report("fetching")
     start_github = time.perf_counter()
 
     pull_request = review_pull_request(pr_url)
@@ -241,7 +245,7 @@ def ai_review(pr_url: str, x_demo_key: str = Header(default=None)):
     github_seconds = time.perf_counter() - start_github
     print(f"GitHub retrieval took: {github_seconds:.2f} seconds", flush=True)
 
-
+    if report: report("checking")
     # Check the current version of the pull request
     owner = pull_request["repository"].split("/")[0]
     repo = pull_request["repository"].split("/")[1]
@@ -267,14 +271,18 @@ def ai_review(pr_url: str, x_demo_key: str = Header(default=None)):
     with cache_lock:
         cached_review = review_cache.get(cache_key)
 
+
     if cached_review is not None:
         print("Cache hit! Reusing saved review.", flush=True)
+        if report:
+            report("cached")
         return cached_review
+
 
     print("Cache miss. Generating a new review.", flush=True)
 
 
-
+    if report: report("preparing")
     # Prepare code changes for Gemini
     code_text = ""
 
@@ -340,6 +348,7 @@ def ai_review(pr_url: str, x_demo_key: str = Header(default=None)):
         raise
     
     try:
+        if report: report("generating")
         start_gemini = time.perf_counter()
         
         response = client.models.generate_content(
@@ -375,7 +384,7 @@ def ai_review(pr_url: str, x_demo_key: str = Header(default=None)):
 
 
         
-    
+    if report: report("formatting")
     result = {
         "repository": pull_request["repository"],
         "pull_request": pull_request["pull_request"],
@@ -390,6 +399,68 @@ def ai_review(pr_url: str, x_demo_key: str = Header(default=None)):
         print("Review saved to cache.", flush=True)
 
     return result
+
+
+@app.get("/ai-review")
+def ai_review(pr_url: str, x_demo_key: str = Header(default=None)):
+    return run_ai_review(pr_url, x_demo_key)
+
+
+@app.get("/ai-review-stream")
+def ai_review_stream(
+    pr_url: str,
+    x_demo_key: str = Header(default=None)
+):
+    verify_demo_key(x_demo_key)
+
+    def stream():
+        events = Queue()
+
+        def report(stage):
+            events.put({"type": "progress", "stage": stage})
+
+        def worker():
+            try:
+                result = run_ai_review(
+                    pr_url,
+                    x_demo_key,
+                    report=report
+                )
+                events.put({"type": "result", "data": result})
+
+            except HTTPException as error:
+                events.put({
+                    "type": "error",
+                    "message": str(error.detail)
+                })
+
+            except Exception:
+                events.put({
+                    "type": "error",
+                    "message": "Review failed. Please try again."
+                })
+
+            finally:
+                events.put(None)
+
+        Thread(target=worker, daemon=True).start()
+
+        while True:
+            event = events.get()
+
+            if event is None:
+                break
+
+            yield json.dumps(event) + "\n"
+
+    return StreamingResponse(
+        stream(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 
