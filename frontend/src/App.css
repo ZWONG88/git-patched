@@ -1,0 +1,150 @@
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+main {
+  width: min(900px, 90%);
+  margin: 90px auto;
+  text-align: center;
+}
+
+h1 {
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  margin-bottom: 10px;
+}
+
+main > p {
+  color: #a1a1aa;
+  font-size: 1.1rem;
+  margin-bottom: 36px;
+}
+
+input {
+  width: min(600px, 100%);
+  box-sizing: border-box;
+  padding: 16px 20px;
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  border-radius: 12px;
+  color: white;
+  font-size: 1rem;
+  outline: none;
+}
+
+input:focus {
+  border-color: #818cf8;
+}
+
+button {
+  display: block;
+  margin: 18px auto;
+  padding: 15px 28px;
+  border: none;
+  border-radius: 12px;
+  background: #6366f1;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #4f46e5;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+section {
+  margin-top: 48px;
+  padding: 28px;
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  border-radius: 16px;
+  text-align: left;
+}
+
+section h2 {
+  margin-top: 0;
+  color: #a5b4fc;
+}
+
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+
+/* AI Review Results */
+
+.review-results {
+  margin-top: 48px;
+  text-align: left;
+}
+
+.review-disclaimer {
+  color: #a1a1aa;
+  font-size: 0.85rem;
+  margin-bottom: 24px;
+}
+
+.markdown-content {
+  color: #e4e4e7;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.markdown-content h2,
+.markdown-content h3 {
+  color: #c4b5fd;
+  margin-top: 30px;
+  margin-bottom: 14px;
+}
+
+.markdown-content h4 {
+  color: #a5b4fc;
+}
+
+.markdown-content p {
+  margin-bottom: 16px;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 24px;
+}
+
+.markdown-content li {
+  margin-bottom: 10px;
+}
+
+.markdown-content code {
+  background: #27272a;
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-size: 0.9em;
+}
+
+.markdown-content pre {
+  background: #09090b;
+  padding: 18px;
+  border-radius: 10px;
+  overflow-x: auto;
+}
+
+.markdown-content pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.markdown-content strong {
+  color: #f4f4f5;
+}
+
