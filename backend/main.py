@@ -32,7 +32,8 @@ cache_lock = Lock()
 
 
 from pathlib import Path
-
+USE_DYNAMODB = os.getenv("USE_DYNAMODB", "false").lower() == "true"
+DYNAMODB_TABLE = os.getenv("DYNAMODB_TABLE", "pr-guardian-usage")
 DATABASE_PATH = Path(__file__).parent / "reviews.db"
 
 def initialize_database():
@@ -45,7 +46,8 @@ def initialize_database():
         """)
         connection.commit()
 
-initialize_database()
+if not USE_DYNAMODB:
+    initialize_database()
 
 def claim_daily_review():
     today = datetime.now(timezone.utc).date().isoformat()
@@ -341,11 +343,17 @@ def run_ai_review(pr_url: str, x_demo_key: str, report=None):
             detail="Another review is running. Please try again shortly."
         )
 
+    
     try:
-        claim_daily_review()
+        if USE_DYNAMODB:
+            from dynamodb_usage import claim_dynamodb_review
+            claim_dynamodb_review()
+        else:
+            claim_daily_review()
     except Exception:
         review_slots.release()
         raise
+
     
     try:
         if report: report("generating")
