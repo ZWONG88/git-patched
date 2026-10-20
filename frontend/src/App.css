@@ -226,3 +226,51 @@ pre {
     animation: none;
   }
 }
+
+
+/* Animated AI review progress indicator */
+
+.review-progress {
+  width: 100%;
+  max-width: 480px;
+  margin: 22px auto 0;
+  text-align: center;
+}
+
+.review-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #292936;
+}
+
+.review-progress-bar {
+  width: 35%;
+  height: 100%;
+  border-radius: 999px;
+  background: #6865f0;
+  animation: guardian-progress 1.6s ease-in-out infinite alternate;
+}
+
+.review-progress-caption {
+  margin-top: 12px;
+  color: #9994ae;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+@keyframes guardian-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(290%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-progress-bar {
+    animation: none;
+    width: 100%;
+  }
+}

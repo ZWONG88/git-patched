@@ -99,12 +99,23 @@ const response = await fetch(
 
       </button>
 
+
 {loading && (
-  <p className="loading-message" role="status">
-    Fetching code changes and generating an AI review.
-    This may take a few minutes. Please keep this page open.
-  </p>
+  <div className="review-progress" role="status">
+    <p className="loading-message">
+      Generating your AI code review...
+    </p>
+
+    <div className="review-progress-track" aria-hidden="true">
+      <div className="review-progress-bar"></div>
+    </div>
+
+    <p className="review-progress-caption">
+      Review time varies depending on the pull request and AI service.
+    </p>
+  </div>
 )}
+
 
 
       {error && (
