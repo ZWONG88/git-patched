@@ -343,7 +343,7 @@ def ai_review(pr_url: str, x_demo_key: str = Header(default=None)):
         start_gemini = time.perf_counter()
         
         response = client.models.generate_content(
-            model="gemini-3.8-flash",
+            model="gemini-3.1-flash-lite",
             contents=prompt
     )
 
