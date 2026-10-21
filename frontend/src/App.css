@@ -354,3 +354,8 @@ input:disabled, select:disabled { opacity: .7; }
   button { max-width: 100%; }
   .app-footer { margin-top: 40px; }
 }
+
+.field-label {
+  width: min(600px, 100%);
+  margin: 0 auto 10px;
+}
