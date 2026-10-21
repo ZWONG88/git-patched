@@ -130,8 +130,36 @@ function App() {
 
   return (
     <main>
-      <h1>PR Guardian 🛡️</h1>
-      <p>Your AI-powered GitHub code reviewer</p>
+      <h1>
+        GitPatched{" "}
+       <svg
+          width="1em"
+          height="1em"
+          viewBox="0 0 48 48"
+          fill="none"
+          aria-hidden="true"
+          style={{ verticalAlign: "-0.15em" }}
+        >
+          <g transform="rotate(-45 24 24)">
+            <rect
+              x="5" y="15" width="38" height="18" rx="7"
+              stroke="#a5b4fc" strokeWidth="2.5"
+              fill="#6366f1" fillOpacity="0.15"
+            />
+            <rect
+              x="19" y="18" width="10" height="12" rx="2"
+              stroke="#a5b4fc" strokeWidth="2"
+            />
+            <g fill="#a5b4fc">
+              <circle cx="12" cy="21" r="1.2" />
+              <circle cx="12" cy="27" r="1.2" />
+              <circle cx="36" cy="21" r="1.2" />
+              <circle cx="36" cy="27" r="1.2" />
+            </g>
+          </g>
+        </svg>
+      </h1>
+      <p>Catch the bug before the merge.</p>
 
       {localDemo && (
         <div className="simulation-panel">
