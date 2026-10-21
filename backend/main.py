@@ -373,7 +373,7 @@ def execute_ai_review(pr_url: str, report=None):
     
     except Exception as e:
         print(
-            f"Gemini request failed: {type(e).__name__}",
+            f"Gemini request failed: {type(e).__name__}; code={getattr(e, 'code', 'unknown')}; status={getattr(e, 'status', 'unknown')}",
             flush=True
         )
 
