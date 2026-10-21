@@ -8,6 +8,17 @@ GitPatched is a full-stack web application that reviews public GitHub pull reque
 
 A demo access key is required to submit and view reviews.
 
+## Screenshots
+
+### Homepage
+
+<img width="1462" height="786" alt="Screenshot 2026-10-21 at 2 37 04 AM" src="https://github.com/user-attachments/assets/b7504092-157e-4bf9-95c2-6eb337cf44f7" />
+
+### Example AI Code Review Results
+
+<img width="1459" height="788" alt="Screenshot 2026-10-21 at 2 38 46 AM" src="https://github.com/user-attachments/assets/d92cbb4f-029f-4189-99b3-311f656c97da" />
+
+
 ## Features
 
 - **Public GitHub PR reviews:** Submit a pull request URL for analysis.
