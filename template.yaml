@@ -1,0 +1,186 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: PR Guardian API and background review worker
+
+Parameters:
+  FrontendOrigin:
+    Type: String
+    Default: http://localhost:5173
+    Description: Frontend origin without a trailing slash
+
+  DemoAccessSecretArn:
+    Type: String
+    Description: ARN of a Secrets Manager secret containing the demo key as plain text
+
+  GeminiSecretArn:
+    Type: String
+    Description: ARN of a Secrets Manager secret containing the Gemini key as plain text
+
+Globals:
+  Function:
+    PermissionsBoundary: !Sub "arn:aws:iam::${AWS::AccountId}:policy/PRGuardianRuntimeBoundary"
+    Runtime: python3.12
+    Architectures:
+      - x86_64
+    CodeUri: build/lambda/
+    MemorySize: 512
+    Environment:
+      Variables:
+        USE_DYNAMODB: "true"
+        JOBS_TABLE: !Ref JobsTable
+
+Resources:
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: job_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: job_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  UsageTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: date
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+
+  WorkerFailureQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  ReviewHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref FrontendOrigin
+        AllowHeaders:
+          - content-type
+          - x-demo-key
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 5
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lambda_handler.handler
+      Timeout: 15
+      Environment:
+        Variables:
+          FRONTEND_URL: !Ref FrontendOrigin
+          DEMO_ACCESS_KEY: !Sub "{{resolve:secretsmanager:${DemoAccessSecretArn}:SecretString}}"
+          REVIEW_WORKER_FUNCTION_NAME: !Ref WorkerFunction
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+              Resource: !GetAtt JobsTable.Arn
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt WorkerFunction.Arn
+      Events:
+        Home:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ReviewHttpApi
+            Path: /
+            Method: GET
+        SubmitJob:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ReviewHttpApi
+            Path: /review-jobs
+            Method: POST
+        GetJob:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ReviewHttpApi
+            Path: /review-jobs/{job_id}
+            Method: GET
+
+  WorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: review_worker.handler
+      Timeout: 180
+      ReservedConcurrentExecutions: 1
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref UsageTable
+          DAILY_REVIEW_LIMIT: "20"
+          GEMINI_API_KEY: !Sub "{{resolve:secretsmanager:${GeminiSecretArn}:SecretString}}"
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt JobsTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt UsageTable.Arn
+      EventInvokeConfig:
+        MaximumEventAgeInSeconds: 3600
+        MaximumRetryAttempts: 0
+        DestinationConfig:
+          OnFailure:
+            Type: SQS
+            Destination: !GetAtt WorkerFailureQueue.Arn
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ApiFunction}"
+      RetentionInDays: 7
+
+  WorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${WorkerFunction}"
+      RetentionInDays: 7
+
+Outputs:
+  ApiUrl:
+    Description: PR Guardian API base URL
+    Value: !Sub "https://${ReviewHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}"
+
+  WorkerFunctionName:
+    Description: Background review worker
+    Value: !Ref WorkerFunction
+
+  JobsTableName:
+    Description: Review jobs table
+    Value: !Ref JobsTable
+
+  FailureQueueUrl:
+    Description: Failed asynchronous invocation records
+    Value: !Ref WorkerFailureQueue

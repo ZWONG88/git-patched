@@ -336,3 +336,26 @@ pre {
   font-size: 0.8rem;
   line-height: 1.5;
 }
+
+/* Simulation controls and recovery work on small screens too. */
+.simulation-panel { max-width: 600px; margin: 24px auto; padding: 20px; border: 1px solid #525079; border-radius: 12px; background: #17171d; }
+.simulation-panel p { color: #c4b5fd; line-height: 1.6; }
+select { width: 100%; padding: 12px; border: 1px solid #52525b; border-radius: 8px; background: #18181b; color: #f4f4f5; font: inherit; }
+button:focus-visible, select:focus-visible { outline: 3px solid #c4b5fd; outline-offset: 3px; }
+input:disabled, select:disabled { opacity: .7; }
+.secondary-button { background: #27272a; border: 1px solid #71717a; font-size: .9rem; }
+.secondary-button:hover { background: #3f3f46; }
+.job-id { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  main { margin: 36px auto; }
+  .review-stages, section { padding: 16px; }
+  .review-stage { flex-wrap: wrap; gap: 8px; }
+  .stage-status { margin-left: 30px; }
+  button { max-width: 100%; }
+  .app-footer { margin-top: 40px; }
+}
+
+.field-label {
+  width: min(600px, 100%);
+  margin: 0 auto 10px;
+}
