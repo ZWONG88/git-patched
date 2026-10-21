@@ -1,9 +1,9 @@
 
-# PR Guardian
+# GitPatched
 
 AI-Powered GitHub Pull Request Reviewer
 
-PR Guardian is a full-stack web application that analyzes GitHub pull requests using Google's Gemini AI. It helps developers understand proposed code changes, identify potential issues, and receive actionable review feedback.
+GitPatched is a full-stack web application that analyzes GitHub pull requests using Google's Gemini AI. It helps developers understand proposed code changes, identify potential issues, and receive actionable review feedback.
 
 ## Features
 
